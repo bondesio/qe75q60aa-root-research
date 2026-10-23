@@ -51,4 +51,6 @@ Samsung firmware or SDK framework binaries.
 
 The SDB command-injection weakness is publicly documented as SVE-2025-50109
 by [Bishop Fox](https://bishopfox.com/blog/samsung-tizen-os-version-through-9-0).
-This repository is not affiliated with Samsung or the upstream authors.
+This overlay is released under the Unlicense; see [LICENSE](LICENSE). The
+upstream projects retain their own licensing and attribution. This repository
+is not affiliated with Samsung or the upstream authors.
