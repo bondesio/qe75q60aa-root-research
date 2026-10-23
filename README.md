@@ -32,6 +32,10 @@ See [the technical report](docs/technical-report.md) for the chain, adaptations,
 validation limits, provenance, and safety notes. [Patch notes](docs/patches.md)
 explain the separate base revisions and build/deployment boundary.
 
+Related follow-up: [native Tizen 6 app and UEP runtime research](https://github.com/bondesio/tizen6-native-app-uep-research)
+documents the model-specific runtime UEP experiment that followed the root
+achievement. It does not replace or modify the root procedure described here.
+
 ## Source and attribution
 
 The host root tool is based on
