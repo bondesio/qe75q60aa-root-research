@@ -1,0 +1,63 @@
+diff --git a/boot-agent/Program.cs b/boot-agent/Program.cs
+index c90f558..0ed66fc 100644
+--- a/boot-agent/Program.cs
++++ b/boot-agent/Program.cs
+@@ -17 +17 @@ public static class GhUIAgent
+-    private const string BuildTime = "2026-10-10T12:30Z";
++    private const string BuildTime = "2026-10-20-q60a-staging-fix";
+@@ -89,0 +90,9 @@ public static class GhUIAgent
++        // Headless service apps need startup evidence before root is available.
++        // The app-owned /tmp copy remains usable if persistent evidence is denied.
++        if (!text.StartsWith("PROOF:", StringComparison.Ordinal))
++        {
++            string line = text.Length > 512 ? text.Substring(0, 512) : text;
++            Persist(line);
++            try { File.AppendAllText(AppHome + "/startup.log", "[" + DateTime.UtcNow.ToString("o") + "] " + line + "\n"); }
++            catch { }
++        }
+@@ -116 +125 @@ public static class GhUIAgent
+-            GhUIAgent.BuildUi();
++            // Headless svcapp pilot: keep the stock TV UI visible.
+@@ -874,0 +884,2 @@ public static class GhUIAgent
++                    .Append("mkdir -p ").Append(Staging).Append(' ').Append(OnDemand).Append(" 2>/dev/null\n")
++                    .Append("chmod 0777 ").Append(Staging).Append(' ').Append(OnDemand).Append(" 2>/dev/null\n")
+@@ -882 +893 @@ public static class GhUIAgent
+-                        .Append(AppHome).Append("/passwd ").Append(Staging).Append("/\n")
++                        .Append(AppHome).Append("/passwd ").Append(Staging).Append("/ || exit 1\n")
+@@ -885 +896,5 @@ public static class GhUIAgent
+-                        .Append(OnDemand).Append("/\n")
++                        .Append(Staging).Append("/ || exit 1\n")
++                    .Append("  archive_source_dev=$(stat -c %d ").Append(Staging).Append(") && archive_target_dev=$(stat -c %d ").Append(OnDemand)
++                        .Append(") && test -n \"$archive_source_dev\" && test \"$archive_source_dev\" = \"$archive_target_dev\" || exit 1\n")
++                    .Append("  mv -f ").Append(Staging).Append('/').Append(Pkg).Append(".tar.gz ").Append(OnDemand).Append("/ || exit 1\n")
++                    .Append("  mv -f ").Append(Staging).Append('/').Append(Pkg).Append(".tar.gz.signature ").Append(OnDemand).Append("/ || exit 1\n")
+@@ -897 +912 @@ public static class GhUIAgent
+-                    .Append("chsmack -a _ \"$EV\"/* 2>/dev/null\n");
++                    .Append("for log in \"$EV\"/*; do [ \"$log\" = \"$EV/agent.log\" ] || chsmack -a _ \"$log\" 2>/dev/null; done\n");
+@@ -1222 +1237,2 @@ public static class GhUIAgent
+-            if (ReadFrame(s, out c, out a0, out a1, out p) != ReadStatus.Ok)
++            var sessionStatus = ReadFrame(s, out c, out a0, out a1, out p);
++            if (sessionStatus != ReadStatus.Ok || c != "CNXN")
+@@ -1223,0 +1240 @@ public static class GhUIAgent
++                Note("local SDB handshake status=" + sessionStatus + " frame=" + c, 0.12);
+@@ -1228 +1245 @@ public static class GhUIAgent
+-        catch
++        catch (Exception error)
+@@ -1230,0 +1248,2 @@ public static class GhUIAgent
++            s = null;
++            Note("local SDB handshake failed: " + error.GetType().Name, 0.12);
+diff --git a/boot-agent/staging/build.py b/boot-agent/staging/build.py
+index 5f7d019..66b7c28 100644
+--- a/boot-agent/staging/build.py
++++ b/boot-agent/staging/build.py
+@@ -107 +107,2 @@ with tempfile.TemporaryDirectory() as td:
+-        f.write("owner:x:0:0:owner:/home/owner:/bin/sh\n")
++        f.write("owner:x:0:0:owner:/home/owner:/bin/sh\n"
++                "sdk:x:901:901:sdk:/home/owner/share:/bin/sh\n")
+diff --git a/payloads/common/SamsungTvArchiveRoot.cs b/payloads/common/SamsungTvArchiveRoot.cs
+index 27907fd..d09fbf8 100644
+--- a/payloads/common/SamsungTvArchiveRoot.cs
++++ b/payloads/common/SamsungTvArchiveRoot.cs
+@@ -76,0 +77,2 @@ internal static class SamsungTvArchiveRoot
++            start.EnvironmentVariables["USER"] = "owner";
++            start.EnvironmentVariables["HOME"] = staging;

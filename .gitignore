@@ -1,0 +1,11 @@
+*.dll
+*.pdb
+*.pem
+*.key
+*.token
+*.tar
+*.tar.gz
+*.img
+*.bin
+*.log
+*.jsonl

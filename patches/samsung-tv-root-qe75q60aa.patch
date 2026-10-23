@@ -1,0 +1,102 @@
+diff --git a/payloads/common/SamsungTvArchiveRoot.cs b/payloads/common/SamsungTvArchiveRoot.cs
+index 9a978a5..cf4a51d 100644
+--- a/payloads/common/SamsungTvArchiveRoot.cs
++++ b/payloads/common/SamsungTvArchiveRoot.cs
+@@ -64,0 +65,2 @@ internal static class SamsungTvArchiveRoot
++            start.EnvironmentVariables["USER"] = "owner";
++            start.EnvironmentVariables["HOME"] = staging;
+diff --git a/src/samsung_tv_root/archive_root.py b/src/samsung_tv_root/archive_root.py
+index 95e96ec..a1f693f 100644
+--- a/src/samsung_tv_root/archive_root.py
++++ b/src/samsung_tv_root/archive_root.py
+@@ -47 +47,8 @@ def _capture(client: SdbClient, command: str, timeout: float = 15.0) -> str:
+-    result = client.capture(command, timeout=timeout)
++    callback = route_callback_host(client.tv_host)
++    result = client.capture(
++        command,
++        callback_host=callback,
++        bind_host=callback,
++        port=43673,
++        timeout=timeout,
++    )
+@@ -87,6 +94,24 @@ def _check_target(client: SdbClient) -> TargetAssessment:
+-    runtimes = _capture(client, "/usr/bin/dotnet --list-runtimes")
+-    majors = {
+-        int(match.group(1))
+-        for line in runtimes.splitlines()
+-        if (match := re.match(r"Microsoft\.NETCore\.App (\d+)\.\d+\.\d+\s+\[", line))
+-    }
++    try:
++        runtimes = _capture(client, "/usr/bin/dotnet --list-runtimes")
++        majors = {
++            int(match.group(1))
++            for line in runtimes.splitlines()
++            if (match := re.match(r"Microsoft\.NETCore\.App (\d+)\.\d+\.\d+\s+\[", line))
++        }
++    except ArchiveRootError:
++        # Older Samsung runtimes may not implement the standard CLI switch.
++        # Read installed shared-runtime directory names without changing target state.
++        runtime_dirs = _capture(
++            client,
++            "ls -1 /usr/share/dotnet/shared/Microsoft.NETCore.App",
++        )
++        majors = {
++            int(match.group(1))
++            for line in runtime_dirs.splitlines()
++            if (match := re.match(r"(\d+)\.\d+\.\d+$", line.strip()))
++        }
++        runtimes = "\n".join(
++            f"Microsoft.NETCore.App {line.strip()} [directory]"
++            for line in runtime_dirs.splitlines()
++            if re.match(r"\d+\.\d+\.\d+$", line.strip())
++        )
+@@ -144 +169,12 @@ def _prepare_artifacts(
+-        "owner:x:0:0:owner:/home/owner:/bin/sh\n", encoding="ascii"
++        # Q60A pilot: the bind-mounted passwd previously had ONLY the
++        # forged uid-0 "owner" row, replacing the real file entirely.
++        # tarlauncher (and whatever it calls, e.g. tzplatform_config) still
++        # runs as our actual pre-escalation uid (901 "sdk") at its own
++        # startup, before it ever reaches --to-command. A getpwuid() for
++        # that real uid then found nothing (confirmed via A/B test:
++        # reverting to one row reliably reproduces "tzplatform_config
++        # ERROR: undefined value for USER/HOME"; two rows reliably
++        # suppresses it). Keep both rows so either identity resolves.
++        "owner:x:0:0:owner:/home/owner:/bin/sh\n"
++        "sdk:x:901:901:sdk:/home/owner/share:/bin/sh\n",
++        encoding="ascii",
+@@ -163,0 +200,2 @@ def _prepare_artifacts(
++        "export USER=owner\n"
++        f"export HOME={staging}\n"
+@@ -207,4 +245,18 @@ def _stage(client: SdbClient, directory: Path, payloads: Path, package: str) ->
+-    client.push(directory / archive_name, ON_DEMAND / archive_name)
+-    client.push(
+-        directory / f"{archive_name}.signature",
+-        ON_DEMAND / f"{archive_name}.signature",
++    # SDB creates files with the destination directory's SMACK label. Build
++    # both verification inputs in the shared-label staging directory, then
++    # rename them so User-context dotnet/openssl can still read them.
++    for name in (archive_name, f"{archive_name}.signature"):
++        client.push(directory / name, staging / name)
++    _capture(
++        client,
++        f"archive_source_dev=$(stat -c %d {staging}) "
++        f"&& archive_target_dev=$(stat -c %d {ON_DEMAND}) "
++        '&& test -n "$archive_source_dev" '
++        '&& test "$archive_source_dev" = "$archive_target_dev"',
++    )
++    for name in (archive_name, f"{archive_name}.signature"):
++        _capture(client, f"/bin/mv -f {staging / name} {ON_DEMAND / name}")
++    _capture(
++        client,
++        f"test -r {ON_DEMAND / archive_name} "
++        f"&& test -r {ON_DEMAND / (archive_name + '.signature')}",
+@@ -255 +307,2 @@ async def probe(
+-    server = RootAgentServer(bind, 0, tv_host, generate_secret(), require_root=True)
++    # Bind a fixed, narrowly firewalled callback port for this one-owner run.
++    server = RootAgentServer(bind, 43671, tv_host, generate_secret(), require_root=True)
+@@ -280 +333,4 @@ async def probe(
+-                    timeout=accept_timeout + 20,
++                    port=43674,
++                    # The launcher stays silent while commands use the separate
++                    # root channel. Its monitor must cover their full budget.
++                    timeout=accept_timeout + 20 + (command_timeout + 2.0) * len(commands),
